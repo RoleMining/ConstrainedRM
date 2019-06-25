@@ -1,1 +1,1 @@
-# ConstrainedRM
+# Constrained Role Mining
