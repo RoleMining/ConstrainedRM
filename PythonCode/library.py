@@ -21,75 +21,79 @@ def get_data(h=6):
 # return characteristics of the optimal solution [dataset name, #roles, min-rpu, max-rpu, min-ppr, max-ppr]
 def get_data_opt(h=6):
     if h == 7:
-        exit('ERROR: the optimal cover for customer dataset is missing')
+        print('WARNING: the optimal cover for customer dataset is missing - using UPA\'s values')
 
     # dataset number [dataset name, #roles, min-rpu, max-rpu, min-ppr, max-ppr]
     datasets = {1: ['datasets/fire1.txt', 64, 1, 9, 1, 395],
                 2: ['datasets/fire2.txt', 10, 1, 3, 2, 307],
-                3: ['datasets/domino.txt', 20, 1, 9, 1, 201],
-                4: ['datasets/apj.txt', 453, 1, 8, 1, 52],
-                5: ['datasets/emea.txt', 34, 1, 1, 9, 554],
-                6: ['datasets/hc.txt', 14, 1, 6, 1, 32],
+                3: ['datasets/domino.txt',20, 1, 9, 1, 201],
+                4: ['datasets/apj.txt',  453, 1, 8, 1,  52],
+                5: ['datasets/emea.txt',  34, 1, 1, 9, 554],
+                6: ['datasets/hc.txt',    14, 1, 6, 1,  32],
+                7: ['datasets/customer.txt', 0, 1, 25, 1, 25], # not optimal solution
                 8: ['datasets/americas_small.txt', 178, 1, 12, 1, 263],
-                9: ['datasets/americas_large.txt', 398, 1, 4, 1, 733]}
+                9: ['datasets/americas_large.txt', 398, 1,  4, 1, 733]}
 
     return datasets[h]
 
 
 # generate mpr/mru values to test heuristics PRUCC1 and PRUCC2, see the paper for details
-def get_test_sets(h=6, n_mpr=5, n_pru=5, fix='mpr', u_l='#P'):
-    # h: dataset
-    # n_mpr: number of values for the mpr parameter
-    # n_pru: number of values for the mru parameter
+def get_test_sets(h=6, n_mpr=5, n_pru=5, fix='mpr', u_l='opt'):
+    #n_mpr number of values for the mpr parameter
+    #n_pru number of values for the mru parameter
 
     dataset = get_data(h)
+    print(dataset)
 
-    # [dataset name, #roles, min-rpu, max-rpu, min-ppr, max-ppr]
+    #[dataset name, #roles, min-rpu, max-rpu, min-ppr, max-ppr]
     dataset_opt = get_data_opt(h)
+    print(dataset_opt)
 
     to_test = dict()
-    if u_l == '#P':
-        upper_limit = dataset[3]
-    else:
+    if u_l == 'opt':
         upper_limit = dataset_opt[5] if fix == 'mpr' else dataset_opt[3]
+    else:
+        upper_limit = dataset[3]
 
+    upper_limit = upper_limit - 1
     if fix == 'mpr':
         fixed_constraint = n_mpr - 2
         derived_constraint = n_pru - 2
         opt_val = dataset_opt[5]
         der_ul_val = dataset_opt[3] - 1
     else:
-        fixed_constraint = n_pru - 2
+        fixed_constraint   = n_pru - 2
         derived_constraint = n_mpr - 2
         opt_val = dataset_opt[3]
         der_ul_val = dataset_opt[5] - 1
 
-    fixed_list = [1]
-    for _ in range(fixed_constraint):
-        fixed_list.append(fixed_list[-1] + upper_limit // (fixed_constraint + 1))
-    fixed_list.append(upper_limit)
+    fixed_list = [2]
+    if upper_limit > 2:
+        for _ in range(fixed_constraint):
+            v = fixed_list[-1] + upper_limit // (fixed_constraint + 1)
+            if v not in fixed_list:
+                fixed_list.append(v)
+        if upper_limit not in fixed_list:
+            fixed_list.append(upper_limit)
 
-    # print(fixed_list, opt_val)
+    print(fixed_list, opt_val)
 
     for t in fixed_list:
         derived_list = [math.ceil(dataset[3] / t)]  # max#P/mpr or max#P/mru
         if t != 1:
+            delta = (dataset[3] - derived_list[0]) // (derived_constraint + 1)
+            limit = dataset[3] - 1
             for _ in range(derived_constraint):
-                if t >= opt_val:
-                    limit = der_ul_val
-                else:
-                    limit = dataset[3]
-                tmp_val = derived_list[-1] + limit // (derived_constraint + 1)
+                tmp_val = derived_list[-1] + delta
                 if tmp_val not in derived_list:
                     derived_list.append(tmp_val)
-            if limit and limit not in derived_list:
+            if limit not in derived_list:
                 derived_list.append(limit)
-        print(t, derived_list)
+        #print(t, derived_list)
 
         to_test[t] = derived_list
 
     return dataset[0], fixed_list, to_test
-
 
 # another way to generate mpr/mru values to test PRUCC1 and PRUCC2
 def compute_test_sets(h=6, n_mpr=3, n_pru=3, fix='mpr'):
@@ -118,32 +122,58 @@ def compute_test_sets(h=6, n_mpr=3, n_pru=3, fix='mpr'):
     return dataset[0], fixed_list, to_test
 
 
+# synthetic roleset
+# To specify each role the dataset generator randomly selects up to
+# mpr integers in the interval [1, mpr] that are mapped to permissions
+# see the paper for details
+def generate_roleset(nr, np, mpr):
+    permissions = list(range(1, np+1))
+    r = 1
+    role_set = []
+    while r <= nr:
+        role_size = random.randint(1,mpr)                   # random size
+        role = sorted(set(random.sample(permissions, role_size)))
+        if role not in role_set:
+            role_set.append(role)
+            r += 1
+
+    mapping = dict()
+    i = 1 #new permission id
+    for role in role_set:
+        for p in role:
+            if p not in mapping:
+                mapping[p] = i
+                i += 1
+
+    new_role_set = []
+    for role in role_set:
+        new_role_set.append(set(map(lambda x: mapping[x], role)))
+
+    return role_set, mapping, new_role_set, list(range(1,i))
+
 # generate synthetic datasets (represented by UA and PA), see the paper for details
 def generate_dataset(nr, nu, np, mru, mpr):
     ua = {}  # dictionary (user, set of roles)
     pa = {}  # dictionary (role, set of permissions)
-    permissions = [p for p in range(1, np + 1)]
-    roles = [r for r in range(1, nr + 1)]
+    permissions = list(range(1, np+1))
+    roles = list(range(1, nr+1))
     used_roles = set()
     used_permissions = set()
     role_set = []
 
+
     # generate random roles
     # print('generate random roles')
+    g_role_set, mapping, role_set, used_permissions = generate_roleset(nr, np, mpr)
+
     r = 1
-    while r <= nr:
-        size_role = random.randint(1, mpr)  # random size
-        role = set(random.sample(permissions, size_role))  # random permissions
-        if role not in role_set:
-            role_set.append(role)
-            pa[r] = role
-            used_permissions.update(role)
-            # print(r, pa[r], ' ', len(pa[r]))
-            r += 1
+    for role in role_set:
+        pa[r] = role
+        r += 1
 
     # assign roles to users
     # print('assign roles to users')
-    for u in range(1, nu + 1):
+    for u in range(1, nu+1):
         n_r_u = random.randint(1, mru)
         ua[u] = set(random.sample(roles, n_r_u))
         used_roles.update(ua[u])
@@ -154,11 +184,10 @@ def generate_dataset(nr, nu, np, mru, mpr):
     for u_r in unused_roles:
         del pa[u_r]
 
-    # print('u_r', used_roles, len(used_roles), 'expected:', nr)
-    # print('un_r', unused_roles)
-    # print('u_p', len(used_permissions), 'expected:', np)
+    #print('u_r', used_roles, len(used_roles), 'expected:', nr)
+    #print('un_r', unused_roles)
+    #print('u_p', len(used_permissions), 'expected:', np)
     return ua, pa, used_roles, used_permissions
-
 
 # save the generated synthetic dataset (save the UPA matrix represented by UA and PA)
 def save_dataset(ua, pa, nr, nu, np, mru, mpr, base='synthetic_datasets/'):
@@ -213,7 +242,7 @@ def compare_solutions(ua_orig, pa_orig, ua_mined, pa_mined):
         print('or:', len(original_roles), 'mr:', len(mined_roles), 'found:', nr)
 
 
-# compute role-set accuracy
+# compute role-set  accuracy
 def disc_roles(orig_roles, mined_roles):
     found_roles = 0
     for r in orig_roles.values():
