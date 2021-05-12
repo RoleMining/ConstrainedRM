@@ -22,6 +22,6 @@ The Python code available in the folders PostProcessing implements two heuristic
 </p>
  
 <p align="justify"> 
-More deatils about the first two heuristics can be found in the paper: Role Mining Heuristics for Permission-Role-Usage Cardinality Constraints,  Carlo Blundo, Stelvio Cimato, Luisa Siniscalchi, The Computer Journal, 2021; https://doi.org/10.1093/comjnl/bxaa186
+More details about the first two heuristics can be found in the paper: Role Mining Heuristics for Permission-Role-Usage Cardinality Constraints,  Carlo Blundo, Stelvio Cimato, Luisa Siniscalchi, The Computer Journal, 2021; https://doi.org/10.1093/comjnl/bxaa186
 </p>
 
